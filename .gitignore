@@ -1,0 +1,27 @@
+# Test repositories
+test-repos/
+mojosolo-dashboard-test/
+*-test/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
