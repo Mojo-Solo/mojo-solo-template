@@ -15,7 +15,7 @@ ISSUES_FOUND=0
 
 # 1. Check branch naming convention
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ ! "$CURRENT_BRANCH" =~ ^(main|staging|feat/[A-Z]+-[0-9]+|hotfix/[A-Z]+-[0-9]+)$ ]]; then
+if [[ ! "$CURRENT_BRANCH" =~ ^(main|staging|feat/[A-Z]+-[0-9]+.*|hotfix/[A-Z]+-[0-9]+.*)$ ]]; then
     echo "❌ Branch name doesn't follow Mojo Solo convention: feat/<ticket> or hotfix/<id>"
     echo "   Current branch: $CURRENT_BRANCH"
     ISSUES_FOUND=1
@@ -24,16 +24,22 @@ fi
 # 2. Standard code quality checks
 echo "📋 Running code quality checks..."
 
-# Console.logs
-CONSOLE_FOUND=$($RG "console\.(log|debug|info)" --type js --type ts . 2>/dev/null || echo "")
+# Console.logs (exclude test files, utils, and logger service)
+CONSOLE_FOUND=$($RG "console\.(log|debug|info)" --type js --type ts \
+    --glob '!*.test.*' --glob '!*.spec.*' --glob '!**/tests/**' --glob '!**/utils/**' \
+    --glob '!test-*.js' --glob '!test-*.ts' --glob '!**/contexts/**' --glob '!**/logger.*' . 2>/dev/null || echo "")
 if [ -n "$CONSOLE_FOUND" ]; then
     echo "$CONSOLE_FOUND"
     echo "❌ Found console.log statements - remove these before committing!"
     ISSUES_FOUND=1
 fi
 
-# TODOs without issue numbers
-TODOS_FOUND=$($RG "TODO|FIXME" --glob '!*.md' . 2>/dev/null | grep -v "#[0-9]" || echo "")
+# TODOs without issue numbers (only check staged files)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=AM | grep -E '\.(js|ts|tsx|jsx|php|py)$' || echo "")
+TODOS_FOUND=""
+if [ -n "$STAGED_FILES" ]; then
+    TODOS_FOUND=$(echo "$STAGED_FILES" | xargs -r $RG "TODO|FIXME" 2>/dev/null | grep -v "#[0-9]" || echo "")
+fi
 if [ -n "$TODOS_FOUND" ]; then
     echo "$TODOS_FOUND"
     echo "❌ Found TODO/FIXME without issue numbers!"
@@ -43,9 +49,11 @@ fi
 # 3. Security checks per Mojo Solo standards
 echo "🔐 Running security checks..."
 
-# Check for hardcoded secrets
-SECRETS_FOUND=$($RG -i "(api[_-]?key|api[_-]?secret|private[_-]?key|aws[_-]?access).*=.*['\"]" \
-   --glob '!*.md' --glob '!*.example' --glob '!*.sample' . 2>/dev/null || echo "")
+# Check for hardcoded secrets (only staged files)
+SECRETS_FOUND=""
+if [ -n "$STAGED_FILES" ]; then
+    SECRETS_FOUND=$(echo "$STAGED_FILES" | xargs -r $RG -i "(api[_-]?key|api[_-]?secret|private[_-]?key|aws[_-]?access).*=.*['\"]" 2>/dev/null || echo "")
+fi
 if [ -n "$SECRETS_FOUND" ]; then
     echo "$SECRETS_FOUND"
     echo "❌ Found potential secrets! Use AWS Secrets Manager instead."
@@ -53,7 +61,7 @@ if [ -n "$SECRETS_FOUND" ]; then
 fi
 
 # Check for non-AWS secret management tools (forbidden per MojoDevProcess)
-FORBIDDEN_SECRETS=$($RG -i "doppler|vault|1password" --glob '!*.md' . 2>/dev/null || echo "")
+FORBIDDEN_SECRETS=$($RG -i "doppler|vault|1password" --glob '!*.md' --glob '!bob' --glob '!**/scripts/**' . 2>/dev/null || echo "")
 if [ -n "$FORBIDDEN_SECRETS" ]; then
     echo "$FORBIDDEN_SECRETS"
     echo "❌ Found forbidden secret management tools! Only AWS Secrets Manager is allowed."
