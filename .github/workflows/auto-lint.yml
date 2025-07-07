@@ -1,0 +1,122 @@
+name: Auto-Fix Linting
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    # Only run on PRs from the same repo (not forks)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run auto-fix
+        run: |
+          # Run linting with fix
+          npm run lint:fix || true
+          
+          # Run prettier if available
+          if npm run format --if-present; then
+            echo "Prettier formatting applied"
+          fi
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit fixes
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "bot@mojo-solo.com"
+          git config --local user.name "Mojo Bot 🤖"
+          git add -A
+          git commit -m "🤖 Auto-fix: Lint and format code
+
+          - Fixed ESLint issues
+          - Applied Prettier formatting
+          - Follows Mojo Solo standards"
+          git push
+
+      - name: Comment on PR
+        if: steps.check-changes.outputs.changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 **Auto-fix applied!**\n\nI\'ve automatically fixed linting issues and formatted the code. Please pull the latest changes before making more commits:\n\n```bash\ngit pull\n```'
+            })
+
+  php-auto-fix:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      hashFiles('composer.json') != ''
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-progress --prefer-dist
+
+      - name: Run PHP CS Fixer
+        run: |
+          if [ -f ".php-cs-fixer.php" ]; then
+            ./vendor/bin/php-cs-fixer fix || true
+          fi
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit fixes
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "bot@mojo-solo.com"
+          git config --local user.name "Mojo Bot 🤖"
+          git add -A
+          git commit -m "🤖 Auto-fix: PHP code style
+
+          - Applied PHP CS Fixer
+          - Follows PSR-12 standards"
+          git push
