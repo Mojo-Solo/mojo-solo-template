@@ -1,0 +1,57 @@
+name: Security Scan
+# Mojo Solo security requirements
+
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
+  schedule:
+    - cron: '0 0 * * 1' # Weekly on Monday
+
+jobs:
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for scanning
+      
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Snyk
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  aws-secrets-validation:
+    name: Validate AWS Secrets Usage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for hardcoded AWS patterns
+        run: |
+          # Check for AWS access keys
+          if grep -rE "AKIA[0-9A-Z]{16}" --include="*.js" --include="*.ts" --include="*.php" .; then
+            echo "❌ Found potential AWS access keys!"
+            exit 1
+          fi
+          
+          # Check for forbidden secret managers
+          if grep -rE "(doppler|vault|1password)" --include="*.js" --include="*.ts" --include="*.php" --exclude-dir=node_modules .; then
+            echo "❌ Found forbidden secret manager! Only AWS Secrets Manager allowed."
+            exit 1
+          fi

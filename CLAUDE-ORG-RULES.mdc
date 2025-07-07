@@ -1,0 +1,86 @@
+# CLAUDE-ORG-RULES.mdc
+# Mojo Solo Organization-wide Claude Code Rules
+# Version 1.1 - Based on MojoDevProcess.md
+
+## Core Directives
+
+1. **No Docker** - Use native binaries with systemd or Forge scripts only
+2. **AWS Secrets Manager Only** - Doppler and other secret managers are forbidden
+3. **Playwright for E2E** - No other E2E testing frameworks allowed
+4. **Storybook for UI** - Single source of truth for UI components
+5. **BOB CLI Wrapper** - Use `bob` commands instead of direct npm/composer/artisan
+
+## Branch Naming
+
+- `main` - Production (protected, squash-merge only)
+- `staging` - Staging environment (must always include main)
+- `feat/<ticket>` - Feature branches (e.g., feat/JIRA-123)
+- `hotfix/<id>` - Emergency fixes
+
+## Required Checks
+
+Before any commit:
+1. Lint + Type-check must pass
+2. Unit + Integration tests must pass
+3. No console.logs in production code
+4. No hardcoded secrets (use AWS Secrets Manager)
+5. TODOs must include issue numbers
+
+## File Structure
+
+```
+<project>/
+├─ .claude/           # Claude Code configuration
+├─ /docs/            # Specs, ADRs, runbooks
+├─ /mocks/           # JSON fixtures
+├─ /storybook/       # UI library
+└─ /playwright/      # E2E tests
+```
+
+## Performance Standards
+
+- Page load: <3s (LCP)
+- API response: <200ms p95
+- JS bundle: <250KB gzipped
+- Database queries: <50ms
+
+## Deployment
+
+- Production: Tuesday/Thursday 10am-4pm ET only
+- No deploys on Friday/Monday (unless hotfix)
+- Zero-downtime deploys with maintenance mode
+- Rollback procedure: `bob deploy:rollback --env=prod`
+
+## Monitoring Requirements
+
+Every application must have:
+- `/health` endpoint returning JSON status
+- APM monitoring (New Relic/DataDog)
+- Error rate alerts (<1%)
+- Response time alerts (>1s)
+
+## Security
+
+- 2FA required for all GitHub accounts
+- Push Protection enabled
+- Secret scanning enabled
+- No .cursor rules (use .claude/*.mdc only)
+
+## When Writing Code
+
+1. Follow existing patterns in the codebase
+2. Use BOB commands for all operations
+3. Write tests for all new features
+4. Update Storybook for UI changes
+5. Include Playwright tests for critical paths
+6. Never commit directly to main or staging
+
+## Emergency Procedures
+
+For production issues:
+1. Create incident in #incidents Slack
+2. Follow severity levels (P0-P3)
+3. Use `bob deploy:rollback` if needed
+4. Post-mortem within 48h for P0/P1
+
+Remember: These rules ensure consistency, security, and reliability across all Mojo Solo projects.
